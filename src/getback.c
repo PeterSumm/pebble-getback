@@ -107,28 +107,36 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
     // APP_LOG(APP_LOG_LEVEL_DEBUG, "Units: %s", units);
   }
   Tuple *dist_tuple = dict_find(iter, DIST_KEY);
+  static char dist_text[9];
   if (dist_tuple) {
     distance = dist_tuple->value->int32;
     if (strcmp(units, "imperial") == 0) {
       text_layer_set_text(unit_layer, "yd");
-      distance = distance / YARD_LENGTH;
-    }
-    else {
-      text_layer_set_text(unit_layer, "m");
-    }
-    if (distance > 2900) {
-      if (strcmp(units, "imperial") == 0) {
-        distance = (int) (distance / YARDS_IN_MILE);
+      if (distance >= YARDS_IN_MILE) {
+        snprintf(dist_text, sizeof(dist_text), "%d",  (int) (distance / YARDS_IN_MILE));
         text_layer_set_text(unit_layer, "mi");
       }
-      else {
-        distance = (int) (distance / 1000);
+    } 
+    else {
+      if (distance >= 20000) {
+        snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance/1000));
         text_layer_set_text(unit_layer, "km");
+      } else { 
+        if (distance >= 10000) {
+          snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/1000), (int) ((distance % 1000)/100));
+          text_layer_set_text(unit_layer, "km");
+        } else {
+          if (distance > 1000) {
+            snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/1000), (int) ((distance % 1000)/10));
+            text_layer_set_text(unit_layer, "km");
+          } else {
+            snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance));
+            text_layer_set_text(unit_layer, "m");
+          }
+        } 
       }
     }
-  }
-  static char dist_text[9];
-  snprintf(dist_text, sizeof(dist_text), "%d", (int) distance);
+   }
   text_layer_set_text(dist_layer, dist_text);
   // APP_LOG(APP_LOG_LEVEL_DEBUG, "Distance updated: %d %s", (int) distance, text_layer_get_text(unit_layer));
 }
@@ -231,7 +239,7 @@ static void window_load(Window *window) {
 
   dist_layer = text_layer_create(GRect(29, 50, 86, 40));
   text_layer_set_background_color(dist_layer, GColorClear);
-  text_layer_set_font(dist_layer, fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS));
+  text_layer_set_font(dist_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
   text_layer_set_text_alignment(dist_layer, GTextAlignmentCenter);
   text_layer_set_text(dist_layer, "");
   layer_add_child(window_layer, text_layer_get_layer(dist_layer));
