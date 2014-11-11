@@ -127,8 +127,8 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
           text_layer_set_text(unit_layer, "km");
         } else {
           if (distance > 1000) {
-            snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/1000), (int) ((distance % 1000)/10));
-            text_layer_set_text(unit_layer, "km");
+            snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/1000), (int) ((distance % 1000)/100), (int) ((distance % 100)/10));
+             text_layer_set_text(unit_layer, "km");
           } else {
             snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance));
             text_layer_set_text(unit_layer, "m");
