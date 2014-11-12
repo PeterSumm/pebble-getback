@@ -10,7 +10,7 @@ static TextLayer *e_layer;
 static TextLayer *s_layer;
 static TextLayer *w_layer;
 static TextLayer *calib_layer;
-int16_t distance = 0;
+int32_t distance = 0;
 int16_t heading = 0;
 int16_t orientation = 0;
 static const uint32_t CMD_KEY = 0x1;
@@ -111,6 +111,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
   if (dist_tuple) {
     distance = dist_tuple->value->int32;
     if (strcmp(units, "imperial") == 0) {
+      distance = distance / YARD_LENGTH;
       text_layer_set_text(unit_layer, "yd");
       if (distance >= YARDS_IN_MILE) {
         snprintf(dist_text, sizeof(dist_text), "%d",  (int) (distance / YARDS_IN_MILE));
@@ -118,7 +119,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
       }
     } 
     else {
-      if (distance >= 20000) {
+      if (distance >= 100000) {
         snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance/1000));
         text_layer_set_text(unit_layer, "km");
       } else { 
@@ -128,7 +129,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
         } else {
           if (distance > 1000) {
             snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/1000), (int) ((distance % 1000)/100), (int) ((distance % 100)/10));
-             text_layer_set_text(unit_layer, "km");
+            text_layer_set_text(unit_layer, "km");
           } else {
             snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance));
             text_layer_set_text(unit_layer, "m");
@@ -158,16 +159,16 @@ void compass_heading_handler(CompassHeadingData heading_data){
   text_layer_set_text(calib_layer, valid_buf);
   int32_t nx = center.x + 63 * sin_lookup(orientation)/TRIG_MAX_RATIO;
   int32_t ny = center.y - 63 * cos_lookup(orientation)/TRIG_MAX_RATIO;
-  layer_set_frame((Layer *) n_layer, GRect(nx - 9, ny - 9, 18, 18));
+  layer_set_frame((Layer *) n_layer, GRect(nx - 14, ny - 18, 28, 28));
   int32_t ex = center.x + 63 * sin_lookup(orientation + TRIG_MAX_ANGLE/4)/TRIG_MAX_RATIO;
   int32_t ey = center.y - 63 * cos_lookup(orientation + TRIG_MAX_ANGLE/4)/TRIG_MAX_RATIO;
-  layer_set_frame((Layer *) e_layer, GRect(ex - 9, ey - 9, 18, 18));
+  layer_set_frame((Layer *) e_layer, GRect(ex - 14, ey - 18, 28, 28));
   int32_t sx = center.x + 63 * sin_lookup(orientation + TRIG_MAX_ANGLE/2)/TRIG_MAX_RATIO;
   int32_t sy = center.y - 63 * cos_lookup(orientation + TRIG_MAX_ANGLE/2)/TRIG_MAX_RATIO;
-  layer_set_frame((Layer *) s_layer, GRect(sx - 9, sy - 9, 18, 18));
+  layer_set_frame((Layer *) s_layer, GRect(sx - 14, sy - 18, 28, 28));
   int32_t wx = center.x + 63 * sin_lookup(orientation + TRIG_MAX_ANGLE*3/4)/TRIG_MAX_RATIO;
   int32_t wy = center.y - 63 * cos_lookup(orientation + TRIG_MAX_ANGLE*3/4)/TRIG_MAX_RATIO;
-  layer_set_frame((Layer *) w_layer, GRect(wx - 9, wy - 9, 18, 18));
+  layer_set_frame((Layer *) w_layer, GRect(wx - 14, wy - 18, 28, 28));
 }
 
 static void head_layer_update_callback(Layer *layer, GContext *ctx) {
@@ -205,39 +206,39 @@ static void window_load(Window *window) {
   gpath_move_to(head_path, grect_center_point(&bounds));  
   layer_add_child(window_layer, head_layer);
 
-  n_layer = text_layer_create(GRect(center.x-9, center.y-71, 18, 18));
+  n_layer = text_layer_create(GRect(center.x-14, center.y-80, 28, 28));
   text_layer_set_background_color(n_layer, GColorClear);
   text_layer_set_text_color(n_layer, GColorWhite);
-  text_layer_set_font(n_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(n_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(n_layer, GTextAlignmentCenter);
   text_layer_set_text(n_layer, "N");
   layer_add_child(head_layer, (Layer *) n_layer);
 
-  e_layer = text_layer_create(GRect(center.x+53, center.y-10, 18, 18));
+  e_layer = text_layer_create(GRect(center.x+48, center.y-19, 28, 28));
   text_layer_set_background_color(e_layer, GColorClear);
   text_layer_set_text_color(e_layer, GColorWhite);
-  text_layer_set_font(e_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(e_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(e_layer, GTextAlignmentCenter);
   text_layer_set_text(e_layer, "E");
   layer_add_child(head_layer, (Layer *) e_layer);
 
-  s_layer = text_layer_create(GRect(center.x-9, center.y+57, 18, 18));
+  s_layer = text_layer_create(GRect(center.x-14, center.y+48, 28, 28));
   text_layer_set_background_color(s_layer, GColorClear);
   text_layer_set_text_color(s_layer, GColorWhite);
-  text_layer_set_font(s_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(s_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(s_layer, GTextAlignmentCenter);
   text_layer_set_text(s_layer, "S");
   layer_add_child(head_layer, (Layer *) s_layer);
 
-  w_layer = text_layer_create(GRect(center.x-71, center.y-9, 18, 18));
+  w_layer = text_layer_create(GRect(center.x-76, center.y-18, 28, 28));
   text_layer_set_background_color(w_layer, GColorClear);
   text_layer_set_text_color(w_layer, GColorWhite);
-  text_layer_set_font(w_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(w_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(w_layer, GTextAlignmentCenter);
   text_layer_set_text(w_layer, "W");
   layer_add_child(head_layer, text_layer_get_layer(w_layer));
 
-  dist_layer = text_layer_create(GRect(29, 50, 86, 40));
+  dist_layer = text_layer_create(GRect(0, 48, 144, 42));
   text_layer_set_background_color(dist_layer, GColorClear);
   text_layer_set_font(dist_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
   text_layer_set_text_alignment(dist_layer, GTextAlignmentCenter);
