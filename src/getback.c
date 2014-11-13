@@ -143,18 +143,18 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
 }
 
 void compass_heading_handler(CompassHeadingData heading_data){
-  static char valid_buf[2];
+  static char valid_buf[5];
+  orientation = heading_data.true_heading;
   switch (heading_data.compass_status) {
     case CompassStatusDataInvalid:
-      snprintf(valid_buf, sizeof(valid_buf), "%s", "C");
+      snprintf(valid_buf, sizeof(valid_buf), "%s", "!");
       return;
     case CompassStatusCalibrating:
-      snprintf(valid_buf, sizeof(valid_buf), "%s", "F");
+      snprintf(valid_buf, sizeof(valid_buf), "%s", "?");
       break;
     case CompassStatusCalibrated:
-      snprintf(valid_buf, sizeof(valid_buf), "%s", "");
+      snprintf(valid_buf, sizeof(valid_buf), "%d", (int) ((360-TRIGANGLE_TO_DEG(orientation)) % 360));
   }
-  orientation = heading_data.true_heading;
   layer_mark_dirty(head_layer);
   text_layer_set_text(calib_layer, valid_buf);
   int32_t nx = center.x + 63 * sin_lookup(orientation)/TRIG_MAX_RATIO;
@@ -252,11 +252,11 @@ static void window_load(Window *window) {
   text_layer_set_text(unit_layer, "");
   layer_add_child(window_layer, text_layer_get_layer(unit_layer));
 
-  calib_layer = text_layer_create(GRect(129, 129, 14, 14));
+  calib_layer = text_layer_create(GRect(90, 132, 54, 18));
   text_layer_set_background_color(calib_layer, GColorClear);
-  text_layer_set_font(calib_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
-  text_layer_set_text_alignment(calib_layer, GTextAlignmentCenter);
-  text_layer_set_text(calib_layer, "C");
+  text_layer_set_font(calib_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(calib_layer, GTextAlignmentRight);
+  text_layer_set_text(calib_layer, ".");
   layer_add_child(window_layer, text_layer_get_layer(calib_layer));
 
 }
