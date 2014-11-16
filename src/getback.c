@@ -98,13 +98,13 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *head_tuple = dict_find(iter, HEAD_KEY);
   if (head_tuple) {
     heading = head_tuple->value->int16;
-    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Updated heading to %d", (int) heading);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Updated heading to %d", (int) heading);
     layer_mark_dirty(head_layer);
   }
   Tuple *units_tuple = dict_find(iter, UNITS_KEY);
   if (units_tuple) {
     strcpy(units, units_tuple->value->cstring);
-    // APP_LOG(APP_LOG_LEVEL_DEBUG, "Units: %s", units);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Units: %s", units);
   }
   Tuple *dist_tuple = dict_find(iter, DIST_KEY);
   static char dist_text[9];
@@ -139,7 +139,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
     }
    }
   text_layer_set_text(dist_layer, dist_text);
-  // APP_LOG(APP_LOG_LEVEL_DEBUG, "Distance updated: %d %s", (int) distance, text_layer_get_text(unit_layer));
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Distance updated: %d %s", (int) distance, text_layer_get_text(unit_layer));
 }
 
 void compass_heading_handler(CompassHeadingData heading_data){
@@ -252,7 +252,7 @@ static void window_load(Window *window) {
   text_layer_set_text(unit_layer, "");
   layer_add_child(window_layer, text_layer_get_layer(unit_layer));
 
-  calib_layer = text_layer_create(GRect(90, 132, 54, 18));
+  calib_layer = text_layer_create(GRect(90, 132, 53, 18));
   text_layer_set_background_color(calib_layer, GColorClear);
   text_layer_set_font(calib_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(calib_layer, GTextAlignmentRight);
