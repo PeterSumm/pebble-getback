@@ -11,7 +11,9 @@ var units = "metric";
 var R = 6371000; // m
 var locationWatcher;
 var locationInterval;
-var locationOptions = {timeout: 15000, maximumAge: 1000, enableHighAccuracy: true };
+
+//I have to set maximumAge to zero to get this to work properly.
+var locationOptions = {timeout: 15000, maximumAge: 0, enableHighAccuracy: true };
 var setPebbleToken = "DY3U";
 
 Pebble.addEventListener("ready", function(e) {
