@@ -9,7 +9,8 @@ static TextLayer *n_layer;
 static TextLayer *e_layer;
 static TextLayer *s_layer;
 static TextLayer *w_layer;
-static TextLayer *calib_layer;
+static TextLayer *direction_layer;
+static TextLayer *bearing_layer;
 int32_t distance = 0;
 int16_t heading = 0;
 int16_t orientation = 0;
@@ -22,7 +23,7 @@ static const char *quit_cmd = "quit";
 static GPath *head_path;
 static GRect hint_layer_size;
 static const double YARD_LENGTH = 0.9144;
-static const double YARDS_IN_MILE = 1760;
+static const int32_t YARDS_IN_MILE = 1760;
 GPoint center;
 
 const GPathInfo HEAD_PATH_POINTS = {
@@ -95,9 +96,14 @@ void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, voi
 void in_received_handler(DictionaryIterator *iter, void *context) {
   // incoming message received
   static char units[9];
+  static char dist_text[9];
+  static char bearing_text[9];
   Tuple *head_tuple = dict_find(iter, HEAD_KEY);
   if (head_tuple) {
     heading = head_tuple->value->int16;
+    text_layer_set_text(direction_layer, ".");
+    snprintf(bearing_text, sizeof(bearing_text), "%d", (int) (360 + heading) % 360);
+    text_layer_set_text(bearing_layer, bearing_text);
     APP_LOG(APP_LOG_LEVEL_DEBUG, "Updated heading to %d", (int) heading);
     layer_mark_dirty(head_layer);
   }
@@ -107,18 +113,29 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
     APP_LOG(APP_LOG_LEVEL_DEBUG, "Units: %s", units);
   }
   Tuple *dist_tuple = dict_find(iter, DIST_KEY);
-  static char dist_text[9];
   if (dist_tuple) {
     distance = dist_tuple->value->int32;
     if (strcmp(units, "imperial") == 0) {
       distance = distance / YARD_LENGTH;
-      text_layer_set_text(unit_layer, "yd");
-      if (distance >= YARDS_IN_MILE) {
-        snprintf(dist_text, sizeof(dist_text), "%d",  (int) (distance / YARDS_IN_MILE));
+      if (distance >= 100 * YARDS_IN_MILE) {
+        snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance/YARDS_IN_MILE));
         text_layer_set_text(unit_layer, "mi");
+      } else { 
+        if (distance >= 10 * YARDS_IN_MILE) {
+          snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/YARDS_IN_MILE), (int) (10 * (distance % YARDS_IN_MILE) / YARDS_IN_MILE));
+          text_layer_set_text(unit_layer, "mi");
+        } else {
+          if (distance >= YARDS_IN_MILE) {
+            snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/YARDS_IN_MILE), (int) (10 * (distance % YARDS_IN_MILE) / YARDS_IN_MILE), 
+              (int) (100 * (distance % (YARDS_IN_MILE / 10))/ YARDS_IN_MILE));
+            text_layer_set_text(unit_layer, "mi");
+          } else {
+            snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance));
+            text_layer_set_text(unit_layer, "yd");
+          }
+        } 
       }
-    } 
-    else {
+    } else {
       if (distance >= 100000) {
         snprintf(dist_text, sizeof(dist_text), "%d", (int) (distance/1000));
         text_layer_set_text(unit_layer, "km");
@@ -127,7 +144,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
           snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/1000), (int) ((distance % 1000)/100));
           text_layer_set_text(unit_layer, "km");
         } else {
-          if (distance > 1000) {
+          if (distance >= 1000) {
             snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/1000), (int) ((distance % 1000)/100), (int) ((distance % 100)/10));
             text_layer_set_text(unit_layer, "km");
           } else {
@@ -143,20 +160,20 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
 }
 
 void compass_heading_handler(CompassHeadingData heading_data){
-  static char valid_buf[5];
+  static char direction_buf[5];
   orientation = heading_data.true_heading;
   switch (heading_data.compass_status) {
     case CompassStatusDataInvalid:
-      snprintf(valid_buf, sizeof(valid_buf), "%s", "!");
+      snprintf(direction_buf, sizeof(direction_buf), "%s", "!");
       return;
     case CompassStatusCalibrating:
-      snprintf(valid_buf, sizeof(valid_buf), "%s", "?");
+      snprintf(direction_buf, sizeof(direction_buf), "%s", "?");
       break;
     case CompassStatusCalibrated:
-      snprintf(valid_buf, sizeof(valid_buf), "%d", (int) ((360-TRIGANGLE_TO_DEG(orientation)) % 360));
+      snprintf(direction_buf, sizeof(direction_buf), "%d", (int) ((360-TRIGANGLE_TO_DEG(orientation)) % 360));
   }
   layer_mark_dirty(head_layer);
-  text_layer_set_text(calib_layer, valid_buf);
+  text_layer_set_text(direction_layer, direction_buf);
   int32_t nx = center.x + 63 * sin_lookup(orientation)/TRIG_MAX_RATIO;
   int32_t ny = center.y - 63 * cos_lookup(orientation)/TRIG_MAX_RATIO;
   layer_set_frame((Layer *) n_layer, GRect(nx - 14, ny - 18, 28, 28));
@@ -252,18 +269,25 @@ static void window_load(Window *window) {
   text_layer_set_text(unit_layer, "");
   layer_add_child(window_layer, text_layer_get_layer(unit_layer));
 
-  calib_layer = text_layer_create(GRect(90, 132, 53, 18));
-  text_layer_set_background_color(calib_layer, GColorClear);
-  text_layer_set_font(calib_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(calib_layer, GTextAlignmentRight);
-  text_layer_set_text(calib_layer, ".");
-  layer_add_child(window_layer, text_layer_get_layer(calib_layer));
+  direction_layer = text_layer_create(GRect(90, 132, 53, 18));
+  text_layer_set_background_color(direction_layer, GColorClear);
+  text_layer_set_font(direction_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(direction_layer, GTextAlignmentRight);
+  text_layer_set_text(direction_layer, ".");
+  layer_add_child(window_layer, text_layer_get_layer(direction_layer));
 
+  bearing_layer = text_layer_create(GRect(0, 132, 53, 18));
+  text_layer_set_background_color(bearing_layer, GColorClear);
+  text_layer_set_font(bearing_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(bearing_layer, GTextAlignmentLeft);
+  text_layer_set_text(direction_layer, "!!!");
+  layer_add_child(window_layer, text_layer_get_layer(bearing_layer));
 }
 
 static void window_unload(Window *window) {
   layer_destroy(head_layer);
-  text_layer_destroy(calib_layer);
+  text_layer_destroy(bearing_layer);
+  text_layer_destroy(direction_layer);
   text_layer_destroy(unit_layer);
   text_layer_destroy(dist_layer);
   text_layer_destroy(w_layer);
