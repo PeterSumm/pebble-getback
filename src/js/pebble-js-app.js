@@ -11,8 +11,7 @@ var units = "metric";
 var R = 6371000; // m
 var locationWatcher;
 var locationInterval;
-
-//I have to set maximumAge to zero to get this to work properly.
+// was var locationOptions = {timeout: 15000, maximumAge: 1000, enableHighAccuracy: true }; but the function only seems to work when maximumAge is set to zero.
 var locationOptions = {timeout: 15000, maximumAge: 0, enableHighAccuracy: true };
 var setPebbleToken = "DY3U";
 
@@ -55,7 +54,10 @@ Pebble.addEventListener("appmessage",
           lat2 = null;
           lon2 = null;
           break;
-        case 'quit':
+       case 'kick':
+          startWatcher();
+          break;
+       case 'quit':
           navigator.geolocation.clearWatch(locationWatcher);
           break;
         default:
