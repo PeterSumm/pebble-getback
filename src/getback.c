@@ -18,12 +18,12 @@ static const uint32_t CMD_KEY = 0x1;
 static const uint32_t HEAD_KEY = 0x2;
 static const uint32_t DIST_KEY = 0x3;
 static const uint32_t UNITS_KEY = 0x4;
-static const char *set_cmd = "set";
-static const char *quit_cmd = "quit";
+static char command[] = "kick";
 static GPath *head_path;
 static GRect hint_layer_size;
 static const double YARD_LENGTH = 0.9144;
 static const int32_t YARDS_IN_MILE = 1760;
+bool updated = true;
 GPoint center;
 
 const GPathInfo HEAD_PATH_POINTS = {
@@ -41,24 +41,24 @@ static void reset_handler(ClickRecognizerRef recognizer, void *context) {
     text_layer_destroy(hint_layer);
     hint_layer = NULL;
   }
+  strcpy(command, "set");
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
   if (iter == NULL) {
-    APP_LOG(APP_LOG_LEVEL_WARNING, "Can not send command to phone!");
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Can not send %s to phone!", command);
     return;
   }
-  dict_write_cstring(iter, CMD_KEY, set_cmd);
+  dict_write_cstring(iter, CMD_KEY, command);
   const uint32_t final_size = dict_write_end(iter);
   app_message_outbox_send();
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Sent command '%s' to phone! (%d bytes)", set_cmd, (int) final_size);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Sent command '%s' to phone! (%d bytes)", command, (int) final_size);
 }
 
 static void hint_handler(ClickRecognizerRef recognizer, void *context) {
   if (hint_layer) {
     text_layer_destroy(hint_layer);
     hint_layer = NULL;
-  }
-  else {
+  } else {
     Layer *window_layer = window_get_root_layer(window);
     hint_layer = text_layer_create(hint_layer_size);
     text_layer_set_font(hint_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
@@ -70,27 +70,32 @@ static void hint_handler(ClickRecognizerRef recognizer, void *context) {
 
 void out_sent_handler(DictionaryIterator *sent, void *context) {
    // outgoing message was delivered
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Message accepted by phone!");
-  Layer *window_layer = window_get_root_layer(window);
-  hint_layer = text_layer_create(hint_layer_size);
-  text_layer_set_font(hint_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text_alignment(hint_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(hint_layer));
-  text_layer_set_text(hint_layer, "Target set. Press again to continue.");
-  vibes_short_pulse();
-}
-
-void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
-   // outgoing message failed
-  APP_LOG(APP_LOG_LEVEL_WARNING, "Message rejected by phone: %d", reason);
-  if (reason == APP_MSG_SEND_TIMEOUT) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Message accepted by phone: %s", command);
+  if (strcmp(command,"set")==0) {
     Layer *window_layer = window_get_root_layer(window);
     hint_layer = text_layer_create(hint_layer_size);
     text_layer_set_font(hint_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
     text_layer_set_text_alignment(hint_layer, GTextAlignmentCenter);
     layer_add_child(window_layer, text_layer_get_layer(hint_layer));
-    text_layer_set_text(hint_layer, "Cannot set target. Restart the app.");
+    text_layer_set_text(hint_layer, "Target set. Press again to continue.");
+  };
+  vibes_short_pulse();
+}
+
+void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
+   // outgoing message failed
+  APP_LOG(APP_LOG_LEVEL_WARNING, "Message rejected by phone: %s %d", command, reason);
+  if (reason == APP_MSG_SEND_TIMEOUT) {
+    if (strcmp(command,"set")==0) {
+      Layer *window_layer = window_get_root_layer(window);
+      hint_layer = text_layer_create(hint_layer_size);
+      text_layer_set_font(hint_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+      text_layer_set_text_alignment(hint_layer, GTextAlignmentCenter);
+      layer_add_child(window_layer, text_layer_get_layer(hint_layer));
+      text_layer_set_text(hint_layer, "Cannot set target. Please restart the app.");
+    };
   }
+  vibes_short_pulse();
 }
 
 void in_received_handler(DictionaryIterator *iter, void *context) {
@@ -98,6 +103,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
   static char units[9];
   static char dist_text[9];
   static char bearing_text[9];
+  updated = true;
   Tuple *head_tuple = dict_find(iter, HEAD_KEY);
   if (head_tuple) {
     heading = head_tuple->value->int16;
@@ -299,6 +305,25 @@ static void window_unload(Window *window) {
   }
 }
 
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  
+  if (!updated){
+    // No update in the last minute, better give the Javascript a kick in the guts.
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    if (iter == NULL) {
+      APP_LOG(APP_LOG_LEVEL_WARNING, "Can not send kick command to phone!");
+      return;
+    }
+    strcpy(command,"kick");
+    dict_write_cstring(iter, CMD_KEY, command);
+    const uint32_t final_size = dict_write_end(iter);
+    app_message_outbox_send();
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Sent command '%s' to phone! (%d bytes)", command, (int) final_size);
+  }
+  updated = false;
+}
+  
 static void init(void) {
   // update screen only when heading changes at least 3 degrees
   compass_service_set_heading_filter(TRIG_MAX_ANGLE*3/360);
@@ -319,6 +344,9 @@ static void init(void) {
   });
   const bool animated = true;
   window_stack_push(window, animated);
+
+  // Register with TickTimerService
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 }
 
 static void deinit(void) {
@@ -326,13 +354,15 @@ static void deinit(void) {
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
   if (iter == NULL) {
+
     APP_LOG(APP_LOG_LEVEL_WARNING, "Can not send quit command to phone!");
     return;
   }
-  dict_write_cstring(iter, CMD_KEY, quit_cmd);
+  strcpy(command,"quit");
+  dict_write_cstring(iter, CMD_KEY, command);
   const uint32_t final_size = dict_write_end(iter);
   app_message_outbox_send();
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Sent command '%s' to phone! (%d bytes)", quit_cmd, (int) final_size);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Sent command '%s' to phone! (%d bytes)", command, (int) final_size);
 
   window_destroy(window);
 }
