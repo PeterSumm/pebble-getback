@@ -11,8 +11,8 @@ var units = "metric";
 var R = 6371000; // m
 var locationWatcher;
 var locationInterval;
-// was var locationOptions = {timeout: 15000, maximumAge: 1000, enableHighAccuracy: true }; but the function only seems to work when maximumAge is set to zero.
-var locationOptions = {timeout: 15000, maximumAge: 0, enableHighAccuracy: true };
+var locationOptions = {timeout: 15000, maximumAge: 1000, enableHighAccuracy: true };
+// or var locationOptions = {timeout: 15000, maximumAge: 0, enableHighAccuracy: true };
 var setPebbleToken = "DY3U";
 
 Pebble.addEventListener("ready", function(e) {
@@ -50,14 +50,17 @@ Pebble.addEventListener("appmessage",
         case 'set':
           storeCurrentPosition();
           break;
+        case 'get':
+          navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
+          break;
         case 'clear':
           lat2 = null;
           lon2 = null;
           break;
-       case 'kick':
+        case 'kick':
           startWatcher();
           break;
-       case 'quit':
+        case 'quit':
           navigator.geolocation.clearWatch(locationWatcher);
           break;
         default:
@@ -186,13 +189,15 @@ function startWatcher() {
   if (locationWatcher) {
     navigator.geolocation.clearWatch(locationWatcher);
   }
-  if (interval > 0) {
-    console.log('Interval is ' + interval + ', using getCurrentPosition and setInterval');
+  if (interval == 60) {
+    console.log('Interval is ' + interval + ', use getCurrentPosition and let Pebble do the repetition');
+    navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
+  } else if (interval > 0) {
+    console.log('Interval is ' + interval + ', use getCurrentPosition and setInterval');
     locationInterval = setInterval(function() {
       navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
     }, interval * 1000);      
-  }
-  else {
+  } else {
     console.log('Interval not set, using watchPosition');
     navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
     locationWatcher = navigator.geolocation.watchPosition(locationSuccess, locationError, locationOptions);  
