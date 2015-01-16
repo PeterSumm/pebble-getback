@@ -78,8 +78,8 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
     text_layer_set_text_alignment(hint_layer, GTextAlignmentCenter);
     layer_add_child(window_layer, text_layer_get_layer(hint_layer));
     text_layer_set_text(hint_layer, "Target set. Press again to continue.");
+    vibes_short_pulse();
   };
-  vibes_short_pulse();
 }
 
 void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
@@ -131,7 +131,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
           snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/YARDS_IN_MILE), (int) (10 * (distance % YARDS_IN_MILE) / YARDS_IN_MILE));
           text_layer_set_text(unit_layer, "mi");
         } else {
-          if (distance >= YARDS_IN_MILE) {
+          if (distance >= YARDS_IN_MILE / 2) {
             snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/YARDS_IN_MILE), (int) (10 * (distance % YARDS_IN_MILE) / YARDS_IN_MILE), 
               (int) (100 * (distance % (YARDS_IN_MILE / 10))/ YARDS_IN_MILE));
             text_layer_set_text(unit_layer, "mi");
@@ -150,7 +150,7 @@ void in_received_handler(DictionaryIterator *iter, void *context) {
           snprintf(dist_text, sizeof(dist_text), "%d.%d", (int) (distance/1000), (int) ((distance % 1000)/100));
           text_layer_set_text(unit_layer, "km");
         } else {
-          if (distance >= 1000) {
+          if (distance >= 999) {
             snprintf(dist_text, sizeof(dist_text), "%d.%d%d", (int) (distance/1000), (int) ((distance % 1000)/100), (int) ((distance % 100)/10));
             text_layer_set_text(unit_layer, "km");
           } else {
@@ -211,11 +211,11 @@ void in_dropped_handler(AppMessageResult reason, void *context) {
  
 static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, hint_handler);
-  window_single_click_subscribe(BUTTON_ID_UP, hint_handler);
-  window_single_click_subscribe(BUTTON_ID_DOWN, hint_handler);
+//  window_single_click_subscribe(BUTTON_ID_UP, hint_handler);
+//  window_single_click_subscribe(BUTTON_ID_DOWN, hint_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, reset_handler, NULL);
-  window_long_click_subscribe(BUTTON_ID_UP, 0, reset_handler, NULL);
-  window_long_click_subscribe(BUTTON_ID_DOWN, 0, reset_handler, NULL);
+//  window_long_click_subscribe(BUTTON_ID_UP, 0, reset_handler, NULL);
+//  window_long_click_subscribe(BUTTON_ID_DOWN, 0, reset_handler, NULL);
 }
 
 static void window_load(Window *window) {
