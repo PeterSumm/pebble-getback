@@ -1,19 +1,27 @@
+// Disable console for production or comment this line out to enable it for debugging.
+console.log = function() {};
+
 var initialized = false;
 var divider = 1000000;
-var interval;
+var interval = 10;
+var runtime = 0;
 var lat1 = 0;
 var lon1 = 0;
-var lat2;
-var lon2;
-var head = 0;
-var dist = 0;
-var units = "metric";
+var lat2 = 0;
+var lon2 = 0;
+var speed;
+var bearing = -1;
+var heading = -1;
+var distance = "";
+var accuracy = "";
+var imperial = false;
+var yardLength = 0.9144;
+var yardsInMile = 1760;
 var R = 6371000; // m
 var locationWatcher;
-var locationInterval;
 var locationOptions = {timeout: 15000, maximumAge: 1000, enableHighAccuracy: true };
-// or var locationOptions = {timeout: 15000, maximumAge: 0, enableHighAccuracy: true };
-var setPebbleToken = "DY3U";
+// var locationOptions = {timeout: 9000, maximumAge: 0, enableHighAccuracy: true };
+var setPebbleToken = "YR5R";
 
 Pebble.addEventListener("ready", function(e) {
   if (typeof(Number.prototype.toRad) === "undefined") {
@@ -28,15 +36,26 @@ Pebble.addEventListener("ready", function(e) {
   }
   lat2 = parseFloat(localStorage.getItem("lat2")) || null;
   lon2 = parseFloat(localStorage.getItem("lon2")) || null;
-  interval = parseInt(localStorage.getItem("interval")) || 0;
-  units = localStorage.getItem("units") || "metric";
+  interval = parseInt(localStorage.getItem("interval")) || 10;
+  runtime = parseInt(localStorage.getItem("runtime")) || 0;
+  imperial = (parseInt(localStorage.getItem("imperial")) == 1);
   if ((lat2 === null) || (lon2 === null)) {
-    storeCurrentPosition();
+    if (runtime === 0) 
+      navigator.geolocation.getCurrentPosition(storeLocation, locationError, locationOptions);
+    else {
+      locationWatcher = navigator.geolocation.watchPosition( storeLocation, locationError, locationOptions );
+      setTimeout( function() { navigator.geolocation.clearWatch( locationWatcher ); }, 1000 * runtime );
+    }
   }
   else {
     console.log("Target location known:" + lon2 + ',' + lat2);
+    if (runtime === 0) 
+      navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
+    else {
+      locationWatcher = navigator.geolocation.watchPosition( locationSuccess, locationError, locationOptions );
+      setTimeout( function() { navigator.geolocation.clearWatch( locationWatcher ); }, 1000 * runtime );
+    }
   }
-  startWatcher();
   // console.log(e.type);
   initialized = true;
   console.log("JavaScript app ready and running! " + e.ready);
@@ -48,20 +67,29 @@ Pebble.addEventListener("appmessage",
       console.log("Got command: " + e.payload.cmd);
       switch (e.payload.cmd) {
         case 'set':
-          storeCurrentPosition();
+          console.log("Attempting to store current position.");
+          if (runtime === 0) 
+            navigator.geolocation.getCurrentPosition(storeLocation, locationError, locationOptions);
+          else {
+            locationWatcher = navigator.geolocation.watchPosition( storeLocation, locationError, locationOptions );
+            setTimeout( function() { navigator.geolocation.clearWatch( locationWatcher ); }, 5000 );
+          }
           break;
         case 'get':
-          navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
+          if (locationWatcher) { navigator.geolocation.clearWatch(locationWatcher); }
+          if (runtime === 0) 
+            navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
+          else {
+            locationWatcher = navigator.geolocation.watchPosition( locationSuccess, locationError, locationOptions );
+            setTimeout( function() { navigator.geolocation.clearWatch( locationWatcher ); }, 1000 * runtime );
+          }
           break;
         case 'clear':
           lat2 = null;
           lon2 = null;
           break;
-        case 'kick':
-          startWatcher();
-          break;
         case 'quit':
-          navigator.geolocation.clearWatch(locationWatcher);
+          if (locationWatcher) navigator.geolocation.clearWatch(locationWatcher);
           break;
         default:
           console.log("Unknown command!");
@@ -82,14 +110,38 @@ Pebble.addEventListener("webviewclosed",
   function(e) {
     var options = JSON.parse(decodeURIComponent(e.response));
     console.log("Webview window returned: " + JSON.stringify(options));
-    units = (options["1"] === 1) ? 'imperial' : 'metric';
-    console.log("Units set to: " + units);
-    localStorage.setItem("units", units);
-    interval = options["2"] || 0;
+    
+/*    var target = options["1"];
+    console.log("Target set to: " + target);
+    var location1 = options["2"];
+    console.log("Location 1 set to: " + location1);
+    var location2 = options["3"];
+    console.log("Location 2 set to: " + location2);
+    var location3 = options["4"];
+    console.log("Location 3 set to: " + location3);
+    var location;
+    if (target>0) {
+      location = (target == 1) ? location1 : (target == 2 ? location2 : location3);
+      var spaceIndex = location.indexOf(" ");
+      if (spaceIndex > 1) {
+        lat2 = 1 * location.slice(0,spaceIndex);
+        lon2 = 1 * location.slice(spaceIndex+1,location.length);
+        console.log("Location " + location + " set to: " + lat2 + " " + lon2);
+        localStorage.setItem("lat2", lat2);
+        localStorage.setItem("lon2", lon2);
+      }
+    }  */
+    
+    imperial = (options["1"] === 1);
+    console.log("Units set to: " + (imperial ? "imperial" : "metric"));
+    localStorage.setItem("imperial", (imperial ? 1 : 0));
+    interval = parseInt(options["2"] || 10);
     console.log("Interval set to: " + interval);
     localStorage.setItem("interval", interval);
+    runtime = parseInt(options["3"] || 5);
+    console.log("RunTime set to: " + runtime);
+    localStorage.setItem("runtime", runtime);
     calculate();
-    startWatcher();
   }
 );
 
@@ -107,9 +159,28 @@ function appMessageNack(e) {
 }
 
 function locationSuccess(position) {
-  console.log("Got location " + position.coords.latitude + ',' + position.coords.longitude + ', heading at ' + position.coords.heading);
+  console.log("Got location " + position.coords.latitude + ',' + position.coords.longitude + ', altitude = ' + position.coords.altitude + ', accuracy = ' + position.coords.accuracy + ', speed = ' + position.coords.speed + ', heading at ' + position.coords.heading + ' at ' + position.timestamp);
   lat1 = position.coords.latitude;
   lon1 = position.coords.longitude;
+  speed = position.coords.speed;
+  if (speed > 0) {
+    if (imperial) {
+      speed *= 2.237;
+    } else {
+      speed *= 3.6;
+    }
+    speed = speed.toFixed((speed < 100) ? 1 : 0);
+  } else 
+    speed = "";
+  accuracy = position.coords.accuracy;
+  if (imperial) accuracy /= yardLength;
+  accuracy = accuracy.toFixed(0);
+  if ((position.coords.heading === null) || isNaN(position.coords.heading)) 
+    heading = -1; 
+  else {
+    heading = Math.round(position.coords.heading);
+    if (heading < 0) heading += 360;
+  }
   calculate();
 }
 
@@ -123,16 +194,15 @@ function storeLocation(position) {
 }
 
 function calculate() {
-  var msg;
+  var msg, unit;
   if (lat2 || lon2) {
     if ((Math.round(lat2*divider) == Math.round(lat1*divider)) && 
         (Math.round(lon2*divider) == Math.round(lon1*divider))) {
       console.log("Not moved yet, still at  " + lat1 + ',' + lon1);
-      dist = 0;
-      head = 0;
-      msg = {"dist": dist,
-             "head": head,
-             "units": units};
+      distance = "0";
+      bearing = 0;
+      msg = {"distance": distance,
+             "bearing": bearing };
       sendMessage(msg);
       return;
     }
@@ -155,17 +225,48 @@ function calculate() {
     var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
             Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(l1) * Math.cos(l2); 
     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    dist = Math.round(R * c);
-    console.log("Calculated dist " + dist);
+    distance = Math.round(R * c);
+    if (imperial) {
+      distance = distance / yardLength;
+      if (distance < yardsInMile) {
+        distance = distance.toFixed(0);
+        unit = "yd";
+      } else {
+        distance = distance / yardsInMile;
+        distance = distance.toFixed(distance < 10 ? 2 : (distance < 100 ? 1 : 0));
+        unit = "mi";
+      } 
+    } else {
+      if (distance < 1000) {
+        distance = distance.toFixed(0);
+        unit = "m";
+      } else {
+        distance = distance / 1000;
+        distance = distance.toFixed(distance < 10 ? 2 : (distance < 100 ? 1 : 0));
+        unit = "km";
+      } 
+    }
+      
+    console.log("Calculated distance " + distance + " " + unit);
     
     var y = Math.sin(dLon) * Math.cos(l2);
     var x = Math.cos(l1)*Math.sin(l2) -
             Math.sin(l1)*Math.cos(l2)*Math.cos(dLon);
-    head = Math.round(Math.atan2(y, x).toDeg());
-    console.log("Calculated head " + head);
-    msg = {"dist": dist,
-           "head": head,
-           "units": units};
+    bearing = Math.round(Math.atan2(y, x).toDeg());
+    if (bearing < 0) bearing += 360;
+    
+    console.log("Calculated bearing " + bearing);
+    console.log("Calculated speed " + speed);
+    console.log("Calculated accuracy " + accuracy);
+    console.log("Calculated heading " + heading);
+
+    msg = {"distance": distance,
+           "bearing": bearing,
+           "unit": unit,
+           "interval": interval,
+           "speed": speed,
+           "accuracy": accuracy,
+           "heading": heading };
     sendMessage(msg);
   }
   else {
@@ -175,41 +276,4 @@ function calculate() {
 
 function locationError(error) {
   console.warn('location error (' + error.code + '): ' + error.message);
-}
-
-function storeCurrentPosition() {
-  console.log("Attempting to store current position.");
-  navigator.geolocation.getCurrentPosition(storeLocation, locationError, locationOptions);
-}
-
-function startWatcher() {  
-  if (locationInterval) {
-    clearInterval(locationInterval);
-  }
-  if (locationWatcher) {
-    navigator.geolocation.clearWatch(locationWatcher);
-  }
-  if (interval == 60) {
-    console.log('Interval is ' + interval + ', use getCurrentPosition and let Pebble do the repetition');
-    navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
-  } else if (interval > 0) {
-    console.log('Interval is ' + interval + ', use getCurrentPosition and setInterval');
-    locationInterval = setInterval(function() {
-      navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
-    }, interval * 1000);      
-  } else {
-    console.log('Interval not set, using watchPosition');
-    navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
-    locationWatcher = navigator.geolocation.watchPosition(locationSuccess, locationError, locationOptions);  
-  }
-  // for testing: randomize movement!
-  /*
-  window.navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
-  locationWatcher = window.setInterval(function() {
-    lat1 = lat1 + Math.random()/100;
-    lon1 = lon1 - Math.random()/100;
-    calculate();
-  }, 5000);
-  console.log("Started location watcher: " + locationWatcher);
-  */
 }
